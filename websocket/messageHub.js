@@ -11,7 +11,7 @@
  *    - The { subject: <string> } in the incoming message. Such
  *      messages can be forwarded to any or all connected clients
  *    ... or:
- *    - One of the { recipient_id: <string> } in the incoming 
+ *    - One of the { recipient_id: <string> } in the incoming
  *      message. Such messages are treated only for the individual
  *      client identified by the recipient_id.
  *
@@ -27,11 +27,12 @@
 const { v4: uuid } = require('uuid')
 
 // Connection to database for LogIn
-const { User } = require('../database/models/')
+const { User, Room } = require('../database/models/')
 
 
 const allUsers = []
-// { <uuid>: { socket, uuid, ... }, ... }
+// [{ socket, socket_id: uuid, groups: Set, ... }, ... ]
+
 
 const messageListeners = {
   subject: {},
@@ -50,7 +51,6 @@ const messageListeners = {
  * messages.
 */
 const newUser = socket => {
-
   // Add new client to allUsers
   const socket_id = uuid()
 
@@ -105,6 +105,15 @@ const treatMessageListener = (action, listener) => {
         return errors
       }
 
+      // const replacer = (key, value) => {
+      //   if (value instanceof Set) {
+      //     value = `Set(${value.size})`
+      //   }
+      //   return value
+      // }
+      // console.log("messageListeners", JSON.stringify(messageListeners, replacer, '  '));
+      
+
       return 0 // no error: all listeners were successfully treated
     }
 
@@ -122,9 +131,9 @@ const treatMessageListener = (action, listener) => {
         keys.forEach( key => {
           const value = listener[key]
           if (value) {
-            const listenerMap = messageListeners[key]
-            const listeners = listenerMap[value]
-                            || (listenerMap[value] = new Set())
+            const listenerSet = messageListeners[key]
+            const listeners = listenerSet[value]
+                            || (listenerSet[value] = new Set())
             listeners[action](callback)
 
             treated += 1
@@ -190,7 +199,9 @@ const treatIncoming = message => {
     listeners = Array.from(
       messageListeners.recipient_id[recipient_id] || []
     )
-    handled = listeners.some( listener => listener( message ))
+    listeners.forEach( listener => (
+      handled = listener( message, handled ) || handled
+    ))
 
     // Check for multiple recipients by unique user name
     if (Array.isArray(recipients)) {
@@ -198,7 +209,9 @@ const treatIncoming = message => {
         listeners = Array.from(
           messageListeners.recipient_id[name] || []
         )
-        handled = listeners.some( listener => listener( message ))
+        listeners.forEach( listener => (
+          handled = listener( message, handled ) || handled
+        ))
       })
     }
 
@@ -206,15 +219,17 @@ const treatIncoming = message => {
     listeners = Array.from(
       messageListeners.sender_id[sender_id] || []
     )
-    handled = listeners.some( listener => listener( message ))
-          || handled
+    listeners.forEach( listener => (
+      handled = listener( message, handled ) || handled
+    ))
 
     // ... and then treat the message by subject
     listeners = Array.from(messageListeners.subject[subject] || [])
-    handled = listeners.some( listener => listener( message ))
-          || handled
+    listeners.forEach( listener => (
+      handled = listener( message, handled ) || handled
+    ))
 
-    if (!handled) {
+    if (!handled) { // may be a promise
       console.log("\nUnhandled message:", message);
     }
 
@@ -226,7 +241,7 @@ const treatIncoming = message => {
 
 
 /**
- * @param {object} message should be an object with either a 
+ * @param {object} message should be an object with either a
  *                 recipient_id or a recipients array. If
  *                 recipient_id is present, recipients array is
  *                 ignored.
@@ -244,8 +259,9 @@ const sendMessage = message => {
 
   if (recipient_id) {
     // Send only to the recipient with the given _id, and ignore
-    // any other recipients. The recipients data will also be sent.
-    recipients = [recipient_id]
+    // any other recipients. The message.recipients data will also
+    // be sent.
+    recipients = [recipient_id] // doesn't alter message.recipients
   }
 
   if (!recipients || !Array.isArray(recipients)) {
@@ -254,15 +270,12 @@ const sendMessage = message => {
 
   // socketsArray = Object.values(allUsers)
   recipients.forEach( id => {
-    // Find the socket for the given socket_id or user_name
+    // Recipients can be identified socket_id, User._id, or
+    // user_name
     const socket = getUserData(
-      { user_name: id, socket_id: id },
+      { socket_id: id, user_id: id, user_name: id },
       "socket"
     )
-    // socketData = socketsArray.find(
-    //   data => data.user_name === id || data.socket_id === id
-    // )
-    // const socket = socketData?.socket
 
     if (!socket) {
       return console.error("Recipient not found:", recipient_id)
@@ -272,13 +285,13 @@ const sendMessage = message => {
 
     socket.send(JSON.stringify(message))
   })
+
+  return true
 }
 
 
 
 function disconnect(socket) {
-  // const userData = Object.values(allUsers)
-  //   .find( value => value.socket === socket )
   const userData = getUserData({ socket })
 
   if (!userData) {
@@ -300,7 +313,13 @@ function disconnect(socket) {
     // Delete the disconnected socket from allUsers
     const index = allUsers.indexOf(userData)
     allUsers.splice(index, 1)
-    // delete allUsers[user_id]
+
+    // Tell any listeners that the socket has just closed
+    treatIncoming({
+      subject: "DISCONNECT",
+      sender_id: "SYSTEM",
+      userData
+    })
   }
 }
 
@@ -336,11 +355,14 @@ treatMessageListener(
 /**
  * Log the user into the _SYSTEM_ (not to a particular group).
  * This gives the client access to the appropriate User record,
- * so that this will be available when the client joins a class,
+ * so that this will be available when the client joins a room,
  * group, or room.
  *
- * @param {string} sender_id
- * @param {string} user_name
+ * @param {incoming} { sender_id  // string object _id
+ *                     user_name  // string
+ *                     roomName   // optional (students only)
+ *                     key_phrase // optional (if first visit)
+ *                   }
  *
  * Gets the _id of an existing user with the given user_name,
  * or creates a new User record with this name.
@@ -352,7 +374,13 @@ treatMessageListener(
  *
  * @returns true, to indicate that the incoming message was handled
  */
-async function logIn({ sender_id, user_name }) {
+async function logIn(incoming) {
+  const {
+    sender_id,
+    roomName,
+    user_name,
+    // key_phrase
+  } = incoming
   // Hope for the best
   const message = {
     subject: "LOGGED_IN", // may be changed if there is an error
@@ -361,13 +389,16 @@ async function logIn({ sender_id, user_name }) {
     user_name
   }
 
-  // Get the _id of the (new) user with the given name
-  const user_id = await User.getOrCreateByName(user_name)
+  // Get the _id of the user with the given name. Initial
+  // login can have an empty key_phrase.
+  const user_id = (roomName)
+    ? await Room.getRegistered(incoming)
+    : await User.teacherLogin(incoming) // no roomName required
 
-  if (!user_id) {
-    // This should never happen
-    console.error("logIn failed:", result)
-    message.subject = "LOGIN_FAILED"
+  if (!user_id) { // no user w/ given name and key_phrase in room
+    console.error("logIn failed:", incoming)
+    message.subject = "LOGIN_FAILED",
+    message.error = "login failed"
 
   } else {
     // Add this data to the allUsers entry for sender_id
@@ -381,6 +412,16 @@ async function logIn({ sender_id, user_name }) {
 
   sendMessage(message)
 
+  // Tell listeners about the success of the login (in this room)
+  treatIncoming({
+    ...message, // includes original sender_id (socket)
+    subject: "LOGIN_RESULT", // overwrite "LOG_IN"
+    recipient_id: "",        // overwrite "SYSTEM"
+    user_id, // will be undefined if login failed
+    error: (user_id ? 0 : -1)
+  })
+  
+
   return true
 }
 
@@ -392,6 +433,11 @@ async function logOut() {
 
 // USER DATA // USER DATA // USER DATA // USER DATA // USER DATA //
 
+/**
+ *
+ * @param {*} id
+ * @param {*} customData
+ */
 function setUserData(id, customData) {
   // const userData  = allUsers.find( data => (
   //   data.user_id === user_id
@@ -411,6 +457,7 @@ function setUserData(id, customData) {
     // Assign the remoining key/value pairs to userData
     Object.assign(userData, customData)
 
+    // <<< DEBUGGING
     const replacer = (key, value) => {
       if (key === "socket") {
         return typeof value
@@ -419,16 +466,35 @@ function setUserData(id, customData) {
       return value
     }
 
-    // console.log(
-    //   "setUserData:",
-    //   JSON.stringify(userData, replacer, 2)
-    // )
+    console.log(
+      "setUserData:",
+      JSON.stringify(userData, replacer, 2)
+    )
+    // DEBUGGING >>>
   }
 }
 
 
 function updateGroups(id, changes ) {
   // const groups = allUsers[user_id]?.groups
+
+  // Ensure that changes have the format:
+  // { <string group name>: <"add" | "delete>", ... }
+  let error = `ERROR in updateGroups:\nchanges should have the structure { <string group name>: <"add" | "delete>", ... }\n${JSON.stringify(changes, null, 2)}`
+
+  if (typeof changes === "object") {
+    if (Object.entries(changes).every(([ key, value ]) => (
+        typeof key === "string"
+    && (value === "add" || value === "delete")
+    ))) {
+      error = ""
+    }
+  }
+
+  if (error) {
+    return console.warn(error)
+  }
+
   const groups = getUserData(
     { socket_id: id, user_id: id },
     "groups"
@@ -436,9 +502,13 @@ function updateGroups(id, changes ) {
 
   if (!groups) { return } //
 
-  Object.entries(changes).forEach(([ action, group_name ]) => {
+  Object.entries(changes).forEach(([ group_name, action ]) => {
     groups[action](group_name)
   })
+
+  // <<< DEBUGGING
+  console.log(`updateGroups for ${id}:`, groups)
+  // DEBUGGING >>>
 }
 
 
@@ -454,6 +524,11 @@ function getUserData( query, key ) {
     return found
   })
 
+  if (!userData) {
+    // console.log("No user data for", query, key)
+    return // undefined
+  }
+
   if (!key) {
     return userData
   }
@@ -462,10 +537,69 @@ function getUserData( query, key ) {
 }
 
 
+function getUserSocketsAndGroups( query ) {
+  const entries = allUsers.filter( data => {
+    let found = false
+    for ( const key in query ) {
+      if (query[key] === data[key] || query[key] === "#all") {
+        found = true
+      }
+    }
+
+    return found
+  })
+  // [{ socket,
+  //    socket_id: uuid,
+  //    groups: Set,
+  //    user_id: <User._id>
+  //    user_name: <string>
+  // }]
+
+  // const sockets = entries.map(({ socket_id }) => socket_id)
+  const socketsAndGroups = entries.reduce(
+    (output, { socket_id, groups }) => {
+      output.sockets.push(socket_id)
+      groups.forEach( group => output.groups.add(group))
+
+      return output
+    },
+    { sockets: [], groups: new Set()}
+  )
+  socketsAndGroups.groups = Array.from(socketsAndGroups.groups)
+
+  return socketsAndGroups // sockets may be []
+}
+
+
+function closeUserSockets(sockets) {
+  sockets.forEach( socketId => {
+    const userData = allUsers.find(({ socket_id }) => (
+      socketId === socket_id
+    ))
+
+    const { socket } = userData
+    socket.close()
+
+    // This will trigger a disconnect message which will be
+    // handled by disconnect() above. userData will be spliced
+    // out of allUsers, and any other scripts listening for
+    // "DISCONNECT" will be called. In Mymo, for example, the
+    // user will be deleted from all groups.
+  })
+}
+
+
+function getGroupSockets(group_name) {
+  return allUsers
+    .filter(({ groups }) => groups?.has(group_name))
+    .map(({ socket_id }) => socket_id)
+}
+
+
 // Share functions and data with other scripts
 
 module.exports = {
-  // used by websocket/index.js
+  // used by websocket/index.js => socket.js
   newUser,
   disconnect,
   treatIncoming,
@@ -474,5 +608,9 @@ module.exports = {
   treatMessageListener,
   sendMessage,
   updateGroups,
-  getUserData
+  setUserData,
+  getUserData,
+  getGroupSockets,
+  getUserSocketsAndGroups,
+  closeUserSockets
 }

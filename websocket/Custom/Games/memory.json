@@ -83,5 +83,31 @@
       "turned": 0,
       "found": 0
     }
+  ],
+  "all": [
+    "images/animals/bear.jpg",
+    "images/animals/bee.jpg",
+    "images/animals/camel.jpg",
+    "images/animals/cat.jpg",
+    "images/animals/chameleon.jpg",
+    "images/animals/cow.jpg",
+    "images/animals/crow.jpg",
+    "images/animals/dog.jpg",
+    "images/animals/donkey.jpg",
+    "images/animals/duck.jpg",
+    "images/animals/elephant.jpg",
+    "images/animals/frog.jpg",
+    "images/animals/giraffe.webp",
+    "images/animals/goat.jpg",
+    "images/animals/goose.png",
+    "images/animals/horse.jpg",
+    "images/animals/ladybird.jpg",
+    "images/animals/lion.webp",
+    "images/animals/pig.jpg",
+    "images/animals/reindeer.jpg",
+    "images/animals/sheep.jpg",
+    "images/animals/sparrow.jpg",
+    "images/animals/starling.jpg",
+    "images/animals/turkey.jpg"
   ]
 }

@@ -9,9 +9,11 @@
 const { readdirSync } = require('fs')
 const { join, basename } = require('path')
 const thisScript = basename(__filename)
+
+// Find all scripts with the extension .js that are not index.js
 const scripts = readdirSync(__dirname)
   .filter( script => script !== thisScript)
-
+  .filter( script => script.slice(-3) === ".js")
 
 // Load the other scripts, so they can register message listeners
 scripts.forEach( script => {
