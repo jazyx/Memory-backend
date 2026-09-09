@@ -1,0 +1,10 @@
+[
+  {
+    "title": "First Test Record",
+    "message": "read from database"
+  },
+  {
+    "title": "Second Test Record",
+    "message": "also available"
+  }
+]
