@@ -1,4 +1,4 @@
-{ "game": "Memory",
+{ "game": "Memory Game",
   "script": "/pages/Memory.jsx",
   "player": 0,
   "players": [],

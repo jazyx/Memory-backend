@@ -35,6 +35,15 @@ treatMessageListener(
     },
     { subject: "FLIP_CARD",
       callback: flipCard
+    },
+    { subject: "REMOVE_PLAYER",
+      callback: removePlayer
+    },
+    { subject: "ACTIVATE_PLAYER",
+      callback: activatePlayer
+    },
+    { subject: "ALLOW_PEEKING",
+      callback: allowPeeking
     }
   ]
 )
@@ -82,9 +91,8 @@ async function logIn(incoming) {
   const {
     sender_id,
     user_name,
-    uNiQiD
+    teacher
   } = incoming
-  console.log("\n***\nlogIn:", incoming)
 
   let message =  {
     subject: "LOGGED_IN",
@@ -103,11 +111,17 @@ async function logIn(incoming) {
     // Add the new player
     const number = players.length
     const color = getColor({number})
-    players.push({
+    const player = {
       name: user_name,
       score: 0,
       color
-    })
+    }
+
+    if (teacher) {
+      player.peek = true
+    }
+
+    players.push(player)
   }
 
   message =  {
@@ -179,6 +193,62 @@ function flipCard({ flipped, player }) {
   })
 
   console.log("\ngame_object.player:", game_object.player)
+
+  const message = {
+    subject: "GAME_OBJECT",
+    game_object
+  }
+
+  broadcast(message)
+}
+
+
+function removePlayer({ name }) {
+  const game_object = liveGames.get("memory")
+  const { players, player } = game_object
+  const index = players.findIndex(data => data.name === name)
+  if (index < 0) { return }
+
+  if (player === index) {
+    // Make next player active before removing this one
+    game_object.player = (player + 1) % players.length
+  }
+
+  players.splice(index, 1)
+
+  const message = {
+    subject: "GAME_OBJECT",
+    game_object
+  }
+
+  broadcast(message)
+}
+
+
+function activatePlayer({ name }) {
+  const game_object = liveGames.get("memory")
+  const players = game_object.players
+  const index = players.findIndex(data => data.name === name)
+  if (index < 0) { return }
+
+  game_object.player = index
+
+  const message = {
+    subject: "GAME_OBJECT",
+    game_object
+  }
+
+  broadcast(message)
+}
+
+
+function allowPeeking({ name, peek }) {
+  const game_object = liveGames.get("memory")
+  const players = game_object.players
+  const playerData = players.find(data => data.name === name)
+  if (!playerData) { return }
+
+  playerData.peek = peek
 
   const message = {
     subject: "GAME_OBJECT",
