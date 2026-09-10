@@ -112,7 +112,7 @@ const treatMessageListener = (action, listener) => {
       //   return value
       // }
       // console.log("messageListeners", JSON.stringify(messageListeners, replacer, '  '));
-      
+
 
       return 0 // no error: all listeners were successfully treated
     }
@@ -315,8 +315,6 @@ function disconnect(socket) {
     const index = allUsers.indexOf(userData)
     allUsers.splice(index, 1)
 
-    console.log("messageListeners", messageListeners);
-    
     // Tell any listeners that the socket has just closed
     // treatIncoming({
     //   subject: "DISCONNECT",
@@ -423,7 +421,7 @@ async function logIn(incoming) {
     user_id, // will be undefined if login failed
     error: (user_id ? 0 : -1)
   })
-  
+
 
   return true
 }
@@ -461,18 +459,18 @@ function setUserData(id, customData) {
     Object.assign(userData, customData)
 
     // <<< DEBUGGING
-    const replacer = (key, value) => {
-      if (key === "socket") {
-        return typeof value
-      }
+    // const replacer = (key, value) => {
+    //   if (key === "socket") {
+    //     return typeof value
+    //   }
 
-      return value
-    }
+    //   return value
+    // }
 
-    console.log(
-      "setUserData:",
-      JSON.stringify(userData, replacer, 2)
-    )
+    // console.log(
+    //   "setUserData:",
+    //   JSON.stringify(userData, replacer, 2)
+    // )
     // DEBUGGING >>>
   }
 }
@@ -517,7 +515,7 @@ function updateGroups(id, changes ) {
 
 function getUserData( query, key ) {
   // [{ socket, socket_id, user_name, ... }, ... ]
-  
+
   const userData = allUsers.find( data => {
     let found = false
     for ( const key in query ) {
