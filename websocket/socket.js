@@ -80,20 +80,14 @@ const websocket = (server) => {
         isAlive: socket.isAlive,
       });
 
-
       disconnect(socket)
     })
 
 
     socket.on("error", error => {
       console.error('WebSocket error:', error)
-      //   if (!socket.isAlive) {
-      //     return socket.terminate()
-      //   }
-
-      //   socket.close()
-      })
     })
+  })
 
 
   // Heartbeats: ping all sockets on a regular basis //
@@ -104,7 +98,13 @@ const websocket = (server) => {
   }
 
   const pingOne = (socket) => {
+    console.log("heartbeat", {
+      readyState: socket.readyState,
+      isAlive: socket.isAlive,
+    });
+
     if (!socket.isAlive) {
+      console.warn("Terminating unresponsive socket");
       return socket.terminate()
     }
 
