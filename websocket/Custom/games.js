@@ -94,6 +94,8 @@ async function logIn(incoming) {
     teacher
   } = incoming
 
+  setUserData(sender_id, { user_name })
+
   let message =  {
     subject: "LOGGED_IN",
     recipient_id: sender_id,

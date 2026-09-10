@@ -17,32 +17,44 @@
 
 
 const { Server, OPEN } = require('ws')
+// 0 for CONNECTING
+// 1 for OPEN
+// 2 for CLOSING
+// 3 for CLOSED
+
 const {
   newUser,
   disconnect,
   treatIncoming,
+  setUserData,
+  getUserData
 } = require('./messageHub')
 
+const PING_DELAY = 5000 // 25000
 
-const PING_DELAY = 30000
-
-
+// allUsers = [{ socket, socket_id, ...}, ... ]
 
 const websocket = (server) => {
   const WebSocketServer = new Server({ server })
 
 
   // Treat each client connection in its own scope
-  WebSocketServer.on('connection', (socket) => {
+  WebSocketServer.on('connection', newConnection)
+
+
+  function newConnection(socket) {
     // socket.isAlive is not a built-in property
     socket.isAlive = true
+
+    // Add an entry to MessageHub's allUsers array
+    newUser(socket) // in MessageHub
+
+    // Remember when connection started
+    setUserData(socket, { start: + new Date() })
 
 
     // Checking that the connection is still open.
     socket.on('pong', heartbeat)
-
-
-    newUser(socket)
 
 
     socket.on('message', raw => {
@@ -60,9 +72,8 @@ const websocket = (server) => {
         message: ${raw.toString()}`)
       }
 
-
       try {
-        treatIncoming(data)
+        treatIncoming(data) // in MessageHub
 
       } catch(error) {
         console.warn(`WS treatIncoming() failed
@@ -87,7 +98,7 @@ const websocket = (server) => {
     socket.on("error", error => {
       console.error('WebSocket error:', error)
     })
-  })
+  }
 
 
   // Heartbeats: ping all sockets on a regular basis //
@@ -98,10 +109,18 @@ const websocket = (server) => {
   }
 
   const pingOne = (socket) => {
-    console.log("heartbeat", {
+    const query = { socket }
+    const userData = getUserData(query)
+    const { socket_id, user_name, start } = userData
+
+    // Debugging broken connections
+    console.log("\nheartbeat", JSON.stringify({
+      milliscnds: + new Date() - start,
       readyState: socket.readyState,
-      isAlive: socket.isAlive,
-    });
+      isAlive: "  " + socket.isAlive,
+      socket_id: socket_id.slice(0, 8),
+      user_name
+    }, null, '  '));
 
     if (!socket.isAlive) {
       console.warn("Terminating unresponsive socket");

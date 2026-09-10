@@ -1,8 +1,8 @@
 /**
  * backend/websocket/messageHub.js
  *
- * This script treats messages sent from and to connected clients.
- * It creates two objects:
+ * This script treats messages sent from and to connected
+ * clients. It creates two objects:
  *
  *  + allUsers stores the socket used by each connected client
  *    using a unique id as the key
@@ -240,6 +240,7 @@ const treatIncoming = message => {
 
 
 
+
 /**
  * @param {object} message should be an object with either a
  *                 recipient_id or a recipients array. If
@@ -314,12 +315,14 @@ function disconnect(socket) {
     const index = allUsers.indexOf(userData)
     allUsers.splice(index, 1)
 
+    console.log("messageListeners", messageListeners);
+    
     // Tell any listeners that the socket has just closed
-    treatIncoming({
-      subject: "DISCONNECT",
-      sender_id: "SYSTEM",
-      userData
-    })
+    // treatIncoming({
+    //   subject: "DISCONNECT",
+    //   sender_id: "SYSTEM",
+    //   userData
+    // })
   }
 }
 
@@ -442,7 +445,7 @@ function setUserData(id, customData) {
   // const userData  = allUsers.find( data => (
   //   data.user_id === user_id
   // ))
-  const userData = getUserData({ user_id: id, socket_id: id })
+  const userData = getUserData({ socket: id, socket_id: id, user_id: id})
 
   if (userData) {
     Object.entries(customData)
@@ -513,6 +516,8 @@ function updateGroups(id, changes ) {
 
 
 function getUserData( query, key ) {
+  // [{ socket, socket_id, user_name, ... }, ... ]
+  
   const userData = allUsers.find( data => {
     let found = false
     for ( const key in query ) {
