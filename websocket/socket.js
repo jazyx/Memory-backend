@@ -38,6 +38,10 @@ const websocket = (server) => {
     socket.isAlive = true
 
 
+    // Checking that the connection is still open.
+    socket.on('pong', heartbeat)
+
+
     newUser(socket)
 
 
@@ -51,9 +55,9 @@ const websocket = (server) => {
         data = JSON.parse(raw.toString())
 
       } catch(error) {
-          return console.warn(`WS message could not be converted to an object
-          ERROR: ${error}
-          message: ${raw}`)
+        return console.warn(`WS message could not be converted to an object
+        ERROR: ${error}
+        message: ${raw.toString()}`)
       }
 
 
@@ -68,24 +72,25 @@ const websocket = (server) => {
     })
 
 
-    socket.on('close', () => {
+    socket.on('close', (code, reason) => {
+      console.log("WebSocket closed", {
+        code,
+        reason: reason.toString(),
+      });
+
       disconnect(socket)
     })
 
 
     socket.on("error", error => {
       console.error('WebSocket error:', error)
-      if (!socket.isAlive) {
-        return socket.terminate()
-      }
+      //   if (!socket.isAlive) {
+      //     return socket.terminate()
+      //   }
 
-      socket.close()
+      //   socket.close()
+      })
     })
-
-
-    // Checking that the connection is still open.
-    socket.on('pong', heartbeat)
-  })
 
 
   // Heartbeats: ping all sockets on a regular basis //
@@ -115,7 +120,6 @@ const websocket = (server) => {
     clearInterval(interval)
   })
 }
-
 
 
 module.exports = websocket

@@ -129,7 +129,7 @@ async function logIn(incoming) {
     game_object
   }
 
-  broadcast(message)
+  return broadcast(message)
 }
 
 
@@ -146,7 +146,7 @@ async function newGame() {
     subject: "GAME_OBJECT",
     game_object
   }
-  broadcast(message)
+  return broadcast(message)
 }
 
 
@@ -199,7 +199,7 @@ function flipCard({ flipped, player }) {
     game_object
   }
 
-  broadcast(message)
+  return broadcast(message)
 }
 
 
@@ -221,7 +221,7 @@ function removePlayer({ name }) {
     game_object
   }
 
-  broadcast(message)
+  return broadcast(message)
 }
 
 
@@ -238,7 +238,7 @@ function activatePlayer({ name }) {
     game_object
   }
 
-  broadcast(message)
+  return broadcast(message)
 }
 
 
@@ -255,7 +255,7 @@ function allowPeeking({ name, peek }) {
     game_object
   }
 
-  broadcast(message)
+  return broadcast(message)
 }
 
 
@@ -264,4 +264,6 @@ async function broadcast(message) {
   const { sockets: recipients } = getUserSocketsAndGroups(query)
   message.recipients = recipients
   sendMessage(message)
+
+  return true
 }
