@@ -76,7 +76,10 @@ const websocket = (server) => {
       console.log("WebSocket closed", {
         code,
         reason: reason.toString(),
+        readyState: socket.readyState,
+        isAlive: socket.isAlive,
       });
+
 
       disconnect(socket)
     })
